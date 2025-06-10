@@ -27,3 +27,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
             first_name=validated_data['fullname']
         )
         return user
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(write_only=True, required=True)
