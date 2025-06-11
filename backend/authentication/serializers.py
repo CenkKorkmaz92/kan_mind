@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
+from .models import Board
 
 class RegistrationSerializer(serializers.ModelSerializer):
     fullname = serializers.CharField(write_only=True)
@@ -31,3 +32,42 @@ class RegistrationSerializer(serializers.ModelSerializer):
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True, required=True)
+
+class BoardSerializer(serializers.ModelSerializer):
+    member_count = serializers.SerializerMethodField()
+    ticket_count = serializers.SerializerMethodField()
+    tasks_to_do_count = serializers.SerializerMethodField()
+    tasks_high_prio_count = serializers.SerializerMethodField()
+    owner_id = serializers.ReadOnlyField(source='owner.id')
+
+    class Meta:
+        model = Board
+        fields = ['id', 'title', 'member_count', 'ticket_count', 'tasks_to_do_count', 'tasks_high_prio_count', 'owner_id']
+
+    def get_member_count(self, obj):
+        return obj.members.count()
+
+    def get_ticket_count(self, obj):
+        # Placeholder: implement ticket/task model and logic later
+        return 0
+
+    def get_tasks_to_do_count(self, obj):
+        # Placeholder: implement ticket/task model and logic later
+        return 0
+
+    def get_tasks_high_prio_count(self, obj):
+        # Placeholder: implement ticket/task model and logic later
+        return 0
+
+class BoardCreateSerializer(serializers.ModelSerializer):
+    members = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True)
+
+    class Meta:
+        model = Board
+        fields = ['title', 'members']
+
+    def create(self, validated_data):
+        members = validated_data.pop('members')
+        board = Board.objects.create(**validated_data)
+        board.members.set(members)
+        return board
