@@ -2,10 +2,14 @@ from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import RegistrationSerializer, LoginSerializer
+from .serializers import RegistrationSerializer, LoginSerializer, BoardSerializer, BoardCreateSerializer
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import generics
+from .models import Board
+from django.db import models
 
 class RegistrationView(APIView):
     def post(self, request):
@@ -43,3 +47,20 @@ class LoginView(APIView):
             else:
                 return Response({'error': 'Invalid credentials.'}, status=status.HTTP_400_BAD_REQUEST)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class BoardListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    queryset = Board.objects.all()
+
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return BoardCreateSerializer
+        return BoardSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        return Board.objects.filter(models.Q(owner=user) | models.Q(members=user)).distinct()
+
+    def perform_create(self, serializer):
+        board = serializer.save(owner=self.request.user)
+        board.members.add(self.request.user)
