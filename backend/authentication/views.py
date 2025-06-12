@@ -10,7 +10,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import generics
 from .models import Board
 from django.db import models
-from rest_framework.generics import RetrieveAPIView, UpdateAPIView, RetrieveUpdateAPIView
+from rest_framework.generics import RetrieveAPIView, UpdateAPIView, RetrieveUpdateAPIView, DestroyAPIView
 
 class RegistrationView(APIView):
     def post(self, request):
@@ -103,3 +103,15 @@ class BoardDetailUpdateView(RetrieveUpdateAPIView):
             response_serializer = BoardUpdateResponseSerializer(updated_board)
             return Response(response_serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class BoardDeleteView(DestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    queryset = Board.objects.all()
+    lookup_url_kwarg = 'board_id'
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        if instance.owner != user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only the owner can delete this board.')
+        instance.delete()
