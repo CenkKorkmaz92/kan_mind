@@ -2,7 +2,7 @@ from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import RegistrationSerializer, LoginSerializer, BoardSerializer, BoardCreateSerializer, BoardDetailSerializer
+from .serializers import RegistrationSerializer, LoginSerializer, BoardSerializer, BoardCreateSerializer, BoardDetailSerializer, BoardUpdateSerializer, BoardUpdateResponseSerializer
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
@@ -10,7 +10,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import generics
 from .models import Board
 from django.db import models
-from rest_framework.generics import RetrieveAPIView
+from rest_framework.generics import RetrieveAPIView, UpdateAPIView, RetrieveUpdateAPIView
 
 class RegistrationView(APIView):
     def post(self, request):
@@ -66,11 +66,15 @@ class BoardListCreateView(generics.ListCreateAPIView):
         board = serializer.save(owner=self.request.user)
         board.members.add(self.request.user)
 
-class BoardDetailView(RetrieveAPIView):
+class BoardDetailUpdateView(RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
     queryset = Board.objects.all()
-    serializer_class = BoardDetailSerializer
     lookup_url_kwarg = 'board_id'
+
+    def get_serializer_class(self):
+        if self.request.method == 'PATCH':
+            return BoardUpdateSerializer
+        return BoardDetailSerializer
 
     def get(self, request, *args, **kwargs):
         board_id = kwargs.get('board_id')
@@ -83,3 +87,19 @@ class BoardDetailView(RetrieveAPIView):
             return Response({'detail': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
         serializer = self.get_serializer(board)
         return Response(serializer.data)
+
+    def patch(self, request, *args, **kwargs):
+        board_id = kwargs.get('board_id')
+        try:
+            board = Board.objects.get(id=board_id)
+        except Board.DoesNotExist:
+            return Response({'detail': 'Board not found.'}, status=status.HTTP_404_NOT_FOUND)
+        user = request.user
+        if not (board.owner == user or board.members.filter(id=user.id).exists()):
+            return Response({'detail': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        serializer = self.get_serializer(board, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated_board = serializer.save()
+            response_serializer = BoardUpdateResponseSerializer(updated_board)
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
