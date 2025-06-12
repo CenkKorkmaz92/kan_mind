@@ -2,7 +2,7 @@ from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import RegistrationSerializer, LoginSerializer, BoardSerializer, BoardCreateSerializer
+from .serializers import RegistrationSerializer, LoginSerializer, BoardSerializer, BoardCreateSerializer, BoardDetailSerializer
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
@@ -10,6 +10,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import generics
 from .models import Board
 from django.db import models
+from rest_framework.generics import RetrieveAPIView
 
 class RegistrationView(APIView):
     def post(self, request):
@@ -64,3 +65,21 @@ class BoardListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         board = serializer.save(owner=self.request.user)
         board.members.add(self.request.user)
+
+class BoardDetailView(RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    queryset = Board.objects.all()
+    serializer_class = BoardDetailSerializer
+    lookup_url_kwarg = 'board_id'
+
+    def get(self, request, *args, **kwargs):
+        board_id = kwargs.get('board_id')
+        try:
+            board = Board.objects.prefetch_related('members', 'tasks__assignee', 'tasks__reviewer').get(id=board_id)
+        except Board.DoesNotExist:
+            return Response({'detail': 'Board not found.'}, status=status.HTTP_404_NOT_FOUND)
+        user = request.user
+        if not (board.owner == user or board.members.filter(id=user.id).exists()):
+            return Response({'detail': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        serializer = self.get_serializer(board)
+        return Response(serializer.data)

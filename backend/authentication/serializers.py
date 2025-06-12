@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from .models import Board
+from .models import Board, Task
 
 class RegistrationSerializer(serializers.ModelSerializer):
     fullname = serializers.CharField(write_only=True)
@@ -71,3 +71,29 @@ class BoardCreateSerializer(serializers.ModelSerializer):
         board = Board.objects.create(**validated_data)
         board.members.set(members)
         return board
+
+class UserShortSerializer(serializers.ModelSerializer):
+    fullname = serializers.SerializerMethodField()
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'fullname']
+    def get_fullname(self, obj):
+        return obj.first_name
+
+class TaskSerializer(serializers.ModelSerializer):
+    assignee = UserShortSerializer(read_only=True)
+    reviewer = UserShortSerializer(read_only=True)
+    comments_count = serializers.SerializerMethodField()
+    class Meta:
+        model = Task
+        fields = ['id', 'title', 'description', 'status', 'priority', 'assignee', 'reviewer', 'due_date', 'comments_count']
+    def get_comments_count(self, obj):
+        # Placeholder: implement comments model later
+        return 0
+
+class BoardDetailSerializer(serializers.ModelSerializer):
+    members = UserShortSerializer(many=True)
+    tasks = TaskSerializer(many=True)
+    class Meta:
+        model = Board
+        fields = ['id', 'title', 'owner_id', 'members', 'tasks']
