@@ -11,6 +11,7 @@ from rest_framework import generics
 from .models import Board
 from django.db import models
 from rest_framework.generics import RetrieveAPIView, UpdateAPIView, RetrieveUpdateAPIView, DestroyAPIView
+from rest_framework.exceptions import ValidationError
 
 class RegistrationView(APIView):
     def post(self, request):
@@ -115,3 +116,26 @@ class BoardDeleteView(DestroyAPIView):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied('Only the owner can delete this board.')
         instance.delete()
+
+class EmailCheckView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        email = request.query_params.get('email')
+        if not email:
+            return Response({'detail': 'E-Mail-Adresse fehlt.'}, status=status.HTTP_400_BAD_REQUEST)
+        from django.core.validators import validate_email
+        try:
+            validate_email(email)
+        except Exception:
+            return Response({'detail': 'Ungültiges E-Mail-Format.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'detail': 'Email nicht gefunden.'}, status=status.HTTP_404_NOT_FOUND)
+        fullname = f"{user.first_name} {user.last_name}".strip()
+        return Response({
+            'id': user.id,
+            'email': user.email,
+            'fullname': fullname
+        }, status=status.HTTP_200_OK)
