@@ -12,8 +12,14 @@ from .models import Board, Task, Comment
 from django.db import models
 from rest_framework.generics import RetrieveAPIView, UpdateAPIView, RetrieveUpdateAPIView, DestroyAPIView, ListCreateAPIView, RetrieveUpdateDestroyAPIView, ListAPIView, CreateAPIView
 from rest_framework import serializers
+from .permissions import IsBoardMember, IsBoardOwner, IsCommentAuthor
+
 
 class RegistrationView(APIView):
+    """
+    Handles user registration.
+    """
+
     def post(self, request):
         serializer = RegistrationSerializer(data=request.data)
         if serializer.is_valid():
@@ -27,7 +33,12 @@ class RegistrationView(APIView):
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class LoginView(APIView):
+    """
+    Handles user login.
+    """
+
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
@@ -50,7 +61,11 @@ class LoginView(APIView):
                 return Response({'error': 'Invalid credentials.'}, status=status.HTTP_400_BAD_REQUEST)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class BoardListCreateView(generics.ListCreateAPIView):
+    """
+    Lists all boards the user is a member of, or creates a new board.
+    """
     permission_classes = [IsAuthenticated]
     queryset = Board.objects.all()
 
@@ -67,7 +82,11 @@ class BoardListCreateView(generics.ListCreateAPIView):
         board = serializer.save(owner=self.request.user)
         board.members.add(self.request.user)
 
+
 class BoardDetailUpdateView(RetrieveUpdateAPIView):
+    """
+    Retrieve, update a board. Only owner or members can access.
+    """
     permission_classes = [IsAuthenticated]
     queryset = Board.objects.all()
     lookup_url_kwarg = 'board_id'
@@ -80,7 +99,8 @@ class BoardDetailUpdateView(RetrieveUpdateAPIView):
     def get(self, request, *args, **kwargs):
         board_id = kwargs.get('board_id')
         try:
-            board = Board.objects.prefetch_related('members', 'tasks__assignee', 'tasks__reviewer').get(id=board_id)
+            board = Board.objects.prefetch_related(
+                'members', 'tasks__assignee', 'tasks__reviewer').get(id=board_id)
         except Board.DoesNotExist:
             return Response({'detail': 'Board not found.'}, status=status.HTTP_404_NOT_FOUND)
         user = request.user
@@ -98,14 +118,19 @@ class BoardDetailUpdateView(RetrieveUpdateAPIView):
         user = request.user
         if not (board.owner == user or board.members.filter(id=user.id).exists()):
             return Response({'detail': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
-        serializer = self.get_serializer(board, data=request.data, partial=True)
+        serializer = self.get_serializer(
+            board, data=request.data, partial=True)
         if serializer.is_valid():
             updated_board = serializer.save()
             response_serializer = BoardUpdateResponseSerializer(updated_board)
             return Response(response_serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class BoardDeleteView(DestroyAPIView):
+    """
+    Deletes a board. Only the owner can delete.
+    """
     permission_classes = [IsAuthenticated]
     queryset = Board.objects.all()
     lookup_url_kwarg = 'board_id'
@@ -117,7 +142,11 @@ class BoardDeleteView(DestroyAPIView):
             raise PermissionDenied('Only the owner can delete this board.')
         instance.delete()
 
+
 class EmailCheckView(APIView):
+    """
+    Checks if an email is registered and returns user details.
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -140,26 +169,42 @@ class EmailCheckView(APIView):
             'fullname': fullname
         }, status=status.HTTP_200_OK)
 
+
 class TasksAssignedToMeView(ListAPIView):
+    """
+    Lists all tasks assigned to the authenticated user.
+    """
     permission_classes = [IsAuthenticated]
     serializer_class = TaskSerializer
+
     def get_queryset(self):
         user = self.request.user
         return Task.objects.filter(assignee=user)
 
+
 class TasksReviewingView(ListAPIView):
+    """
+    Lists all tasks where the authenticated user is a reviewer.
+    """
     permission_classes = [IsAuthenticated]
     serializer_class = TaskSerializer
+
     def get_queryset(self):
         user = self.request.user
         return Task.objects.filter(reviewer=user)
 
+
 class TaskListCreateView(ListCreateAPIView):
+    """
+    Lists all tasks for boards the user is a member of, or creates a new task.
+    """
     permission_classes = [IsAuthenticated]
     serializer_class = TaskSerializer
+
     def get_queryset(self):
         user = self.request.user
         return Task.objects.filter(board__members=user)
+
     def perform_create(self, serializer):
         user = self.request.user
         board_id = self.request.data.get('board')
@@ -170,26 +215,35 @@ class TaskListCreateView(ListCreateAPIView):
         except Board.DoesNotExist:
             raise serializers.ValidationError({'board': 'Board not found.'})
         if not board.members.filter(id=user.id).exists():
-            raise serializers.ValidationError({'detail': 'Forbidden. Must be a board member.'})
-        assignee = User.objects.filter(id=assignee_id).first() if assignee_id else None
-        reviewer = User.objects.filter(id=reviewer_id).first() if reviewer_id else None
+            raise serializers.ValidationError(
+                {'detail': 'Forbidden. Must be a board member.'})
+        assignee = User.objects.filter(
+            id=assignee_id).first() if assignee_id else None
+        reviewer = User.objects.filter(
+            id=reviewer_id).first() if reviewer_id else None
         if assignee and not board.members.filter(id=assignee.id).exists():
-            raise serializers.ValidationError({'assignee_id': 'Assignee must be a board member.'})
+            raise serializers.ValidationError(
+                {'assignee_id': 'Assignee must be a board member.'})
         if reviewer and not board.members.filter(id=reviewer.id).exists():
-            raise serializers.ValidationError({'reviewer_id': 'Reviewer must be a board member.'})
+            raise serializers.ValidationError(
+                {'reviewer_id': 'Reviewer must be a board member.'})
         serializer.save(board=board, assignee=assignee, reviewer=reviewer)
 
+
 class TaskDetailView(RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated]
+    """
+    Retrieve, update, or delete a task. Only board members can access. Only board owner can delete.
+    """
+    permission_classes = [IsAuthenticated, IsBoardMember]
     serializer_class = TaskSerializer
     queryset = Task.objects.all()
     lookup_field = 'id'
+
     def get_object(self):
         obj = super().get_object()
-        user = self.request.user
-        if not obj.board.members.filter(id=user.id).exists():
-            raise serializers.ValidationError({'detail': 'Forbidden. Must be a board member.'})
+        self.check_object_permissions(self.request, obj)
         return obj
+
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
@@ -199,8 +253,10 @@ class TaskDetailView(RetrieveUpdateDestroyAPIView):
         assignee_id = data.get('assignee_id')
         reviewer_id = data.get('reviewer_id')
         board = instance.board
-        assignee = User.objects.filter(id=assignee_id).first() if assignee_id else None
-        reviewer = User.objects.filter(id=reviewer_id).first() if reviewer_id else None
+        assignee = User.objects.filter(
+            id=assignee_id).first() if assignee_id else None
+        reviewer = User.objects.filter(
+            id=reviewer_id).first() if reviewer_id else None
         if assignee and not board.members.filter(id=assignee.id).exists():
             return Response({'assignee_id': 'Assignee must be a board member.'}, status=status.HTTP_400_BAD_REQUEST)
         if reviewer and not board.members.filter(id=reviewer.id).exists():
@@ -209,6 +265,7 @@ class TaskDetailView(RetrieveUpdateDestroyAPIView):
         serializer.is_valid(raise_exception=True)
         serializer.save(assignee=assignee, reviewer=reviewer)
         return Response(serializer.data)
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         user = request.user
@@ -217,32 +274,40 @@ class TaskDetailView(RetrieveUpdateDestroyAPIView):
         self.perform_destroy(instance)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+
 class TaskCommentsListCreateView(ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    """
+    List or create comments for a task. Only board members can access.
+    """
+    permission_classes = [IsAuthenticated, IsBoardMember]
     serializer_class = CommentSerializer
+
     def get_queryset(self):
         user = self.request.user
         task_id = self.kwargs['task_id']
         task = get_object_or_404(Task, id=task_id)
-        if not task.board.members.filter(id=user.id).exists():
-            raise serializers.ValidationError({'detail': 'Forbidden. Must be a board member.'})
+        self.check_object_permissions(self.request, task)
         return Comment.objects.filter(task=task).order_by('created_at')
+
     def perform_create(self, serializer):
         user = self.request.user
         task_id = self.kwargs['task_id']
         task = get_object_or_404(Task, id=task_id)
-        if not task.board.members.filter(id=user.id).exists():
-            raise serializers.ValidationError({'detail': 'Forbidden. Must be a board member.'})
+        self.check_object_permissions(self.request, task)
         serializer.save(task=task, author=user)
 
+
 class TaskCommentDeleteView(DestroyAPIView):
-    permission_classes = [IsAuthenticated]
+    """
+    Delete a comment from a task. Only the author can delete.
+    """
+    permission_classes = [IsAuthenticated, IsCommentAuthor]
     serializer_class = CommentSerializer
+
     def get_object(self):
         user = self.request.user
         task_id = self.kwargs['task_id']
         comment_id = self.kwargs['comment_id']
         comment = get_object_or_404(Comment, id=comment_id, task_id=task_id)
-        if comment.author != user:
-            raise serializers.ValidationError({'detail': 'Only the author can delete this comment.'})
+        self.check_object_permissions(self.request, comment)
         return comment
