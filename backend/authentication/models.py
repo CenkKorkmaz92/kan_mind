@@ -1,8 +1,16 @@
+"""
+Models for the Kanban backend app.
+Defines Board, Task, and Comment data structures.
+"""
+
 from django.db import models
 from django.contrib.auth.models import User
 
 
 class Board(models.Model):
+    """
+    Represents a Kanban board with a title, owner, and members.
+    """
     title = models.CharField(max_length=255)
     owner = models.ForeignKey(
         User, related_name='owned_boards', on_delete=models.CASCADE)
@@ -13,6 +21,9 @@ class Board(models.Model):
 
 
 class Task(models.Model):
+    """
+    Represents a task on a board, with status, priority, assignee, reviewer, and due date.
+    """
     STATUS_CHOICES = [
         ('to-do', 'To Do'),
         ('in-progress', 'In Progress'),
@@ -43,6 +54,9 @@ class Task(models.Model):
 
 
 class Comment(models.Model):
+    """
+    Represents a comment on a task, with author and creation timestamp.
+    """
     task = models.ForeignKey(
         'Task', related_name='comments', on_delete=models.CASCADE)
     author = models.ForeignKey(

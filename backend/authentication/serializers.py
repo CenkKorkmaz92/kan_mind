@@ -1,3 +1,8 @@
+"""
+Serializers for the Kanban backend app.
+Handles validation and transformation of Board, Task, Comment, and User data.
+"""
+
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
@@ -5,6 +10,9 @@ from .models import Board, Task, Comment
 
 
 class RegistrationSerializer(serializers.ModelSerializer):
+    """
+    Serializer for user registration. Validates email, password, and creates a new user.
+    """
     fullname = serializers.CharField(write_only=True)
     email = serializers.EmailField(required=True)
     password = serializers.CharField(
@@ -35,11 +43,17 @@ class RegistrationSerializer(serializers.ModelSerializer):
 
 
 class LoginSerializer(serializers.Serializer):
+    """
+    Serializer for user login. Validates email and password.
+    """
     email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True, required=True)
 
 
 class BoardSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Board model. Includes member and ticket counts, and owner ID.
+    """
     member_count = serializers.SerializerMethodField()
     ticket_count = serializers.SerializerMethodField()
     tasks_to_do_count = serializers.SerializerMethodField()
@@ -52,6 +66,7 @@ class BoardSerializer(serializers.ModelSerializer):
                   'tasks_to_do_count', 'tasks_high_prio_count', 'owner_id']
 
     def get_member_count(self, obj):
+        """Returns the number of members in the board."""
         return obj.members.count()
 
     def get_ticket_count(self, obj):

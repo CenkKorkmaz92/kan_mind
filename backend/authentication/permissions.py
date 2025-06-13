@@ -1,5 +1,6 @@
 """
-Custom permissions for the authentication app (Kanban backend).
+Custom permissions for the Kanban backend app.
+Defines access control for boards, tasks, and comments.
 """
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
