@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from .models import Board, Task
+from .models import Board, Task, Comment
 
 class RegistrationSerializer(serializers.ModelSerializer):
     fullname = serializers.CharField(write_only=True)
@@ -80,16 +80,24 @@ class UserShortSerializer(serializers.ModelSerializer):
     def get_fullname(self, obj):
         return obj.first_name
 
+class CommentSerializer(serializers.ModelSerializer):
+    author = serializers.SerializerMethodField()
+    class Meta:
+        model = Comment
+        fields = ['id', 'created_at', 'author', 'content']
+    def get_author(self, obj):
+        return obj.author.first_name
+
 class TaskSerializer(serializers.ModelSerializer):
     assignee = UserShortSerializer(read_only=True)
     reviewer = UserShortSerializer(read_only=True)
     comments_count = serializers.SerializerMethodField()
+    board = serializers.PrimaryKeyRelatedField(read_only=True)
     class Meta:
         model = Task
-        fields = ['id', 'title', 'description', 'status', 'priority', 'assignee', 'reviewer', 'due_date', 'comments_count']
+        fields = ['id', 'board', 'title', 'description', 'status', 'priority', 'assignee', 'reviewer', 'due_date', 'comments_count']
     def get_comments_count(self, obj):
-        # Placeholder: implement comments model later
-        return 0
+        return obj.comments.count()
 
 class BoardDetailSerializer(serializers.ModelSerializer):
     members = UserShortSerializer(many=True)
