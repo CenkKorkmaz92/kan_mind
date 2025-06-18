@@ -148,6 +148,17 @@ class TaskCreateView(generics.CreateAPIView):
     serializer_class = TaskSerializer
     permission_classes = [permissions.IsAuthenticated, IsBoardMemberAndAssigneeReviewerValid]
 
+    def create(self, request, *args, **kwargs):
+        # Custom error for malformed JSON
+        try:
+            data = request.data
+        except Exception:
+            return Response({'detail': 'Malformed JSON: Please check your request body.'}, status=status.HTTP_400_BAD_REQUEST)
+        board_id = data.get('board')
+        if not board_id:
+            return Response({'detail': 'A valid board ID must be provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        return super().create(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         """
         Create a new task, ensuring assignee and reviewer are board members.
