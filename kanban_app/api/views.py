@@ -24,9 +24,9 @@ class BoardListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         """
-        Return all boards where the user is a member or owner.
+        Return all boards where the user is a member or owner, without duplicates.
         """
-        return Board.objects.filter(members=self.request.user) | Board.objects.filter(owner=self.request.user)
+        return (Board.objects.filter(members=self.request.user) | Board.objects.filter(owner=self.request.user)).distinct()
 
     def perform_create(self, serializer):
         """

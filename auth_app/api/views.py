@@ -5,9 +5,11 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from .serializers import RegistrationSerializer, LoginSerializer
+from rest_framework.authentication import TokenAuthentication
 
 
 class RegistrationView(APIView):
+    authentication_classes = []
     permission_classes = []
 
     def post(self, request):
@@ -29,6 +31,7 @@ class RegistrationView(APIView):
 
 
 class LoginView(APIView):
+    authentication_classes = []
     permission_classes = []
 
     def post(self, request):
