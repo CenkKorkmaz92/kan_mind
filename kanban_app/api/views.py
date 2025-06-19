@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from .serializers import BoardSerializer, BoardDetailSerializer, TaskSerializer, CommentSerializer
-from .permissions import IsBoardOwnerOrMember, IsBoardOwner, IsTaskOwnerOrBoardOwner, IsCommentAuthor, IsBoardMemberAndAssigneeReviewerValid
+from .permissions import IsBoardOwnerOrMember, IsBoardOwner, IsTaskOwnerOrBoardOwner, IsCommentAuthor
 from kanban_app.models import Board, Task, Comment
 from rest_framework.exceptions import PermissionDenied
 
@@ -146,7 +146,7 @@ class TaskCreateView(generics.CreateAPIView):
     Only board members can create tasks.
     """
     serializer_class = TaskSerializer
-    permission_classes = [permissions.IsAuthenticated, IsBoardMemberAndAssigneeReviewerValid]
+    permission_classes = [permissions.IsAuthenticated]
 
     def create(self, request, *args, **kwargs):
         # Custom error for malformed JSON
@@ -157,7 +157,25 @@ class TaskCreateView(generics.CreateAPIView):
         board_id = data.get('board')
         if not board_id:
             return Response({'detail': 'A valid board ID must be provided.'}, status=status.HTTP_400_BAD_REQUEST)
-        return super().create(request, *args, **kwargs)
+        try:
+            board = Board.objects.get(id=board_id)
+        except Board.DoesNotExist:
+            return Response({'detail': 'Board not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if request.user not in board.members.all() and request.user != board.owner:
+            return Response({'detail': 'Keine Berechtigung für dieses Board.'}, status=status.HTTP_403_FORBIDDEN)
+        assignee_id = data.get('assignee_id')
+        reviewer_id = data.get('reviewer_id')
+        assignee = User.objects.filter(id=assignee_id).first() if assignee_id else None
+        reviewer = User.objects.filter(id=reviewer_id).first() if reviewer_id else None
+        if assignee_id and (not assignee or assignee not in board.members.all()):
+            return Response({'detail': 'Assignee must be a board member.'}, status=status.HTTP_403_FORBIDDEN)
+        if reviewer_id and (not reviewer or reviewer not in board.members.all()):
+            return Response({'detail': 'Reviewer must be a board member.'}, status=status.HTTP_403_FORBIDDEN)
+        serializer = TaskSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(created_by=request.user, board=board, assignee=assignee, reviewer=reviewer)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def perform_create(self, serializer):
         """
